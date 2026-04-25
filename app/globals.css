@@ -11,66 +11,72 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-html,
+html {
+  background: #000;
+  /* Prevent overscroll bounce showing white */
+  overscroll-behavior: none;
+}
+
 body {
   background: #000;
   color: #fff;
   font-family: var(--font-space-grotesk), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Reserve space for bottom nav + iPhone home indicator */
+  padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
 }
 
-/* Remove number input arrows */
+/* ─── Shared input style ─────────────────────────────────────────────────── */
+/* Use class="input" on all form fields */
+@layer components {
+  .input {
+    @apply w-full bg-black border border-[#2a2a2a] rounded-xl px-4 py-3.5 text-base text-white placeholder-[#3a3a3a] focus:outline-none focus:border-white transition-colors;
+    min-height: 52px;
+  }
+}
+
+/* ─── Remove spinners from number inputs ──────────────────────────────────── */
 input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
-input[type='number'] {
-  -moz-appearance: textfield;
-}
+input[type='number'] { -moz-appearance: textfield; }
 
-/* Date input styling */
+/* ─── Date picker icon ────────────────────────────────────────────────────── */
 input[type='date']::-webkit-calendar-picker-indicator {
   filter: invert(1);
-  opacity: 0.4;
+  opacity: 0.3;
+  cursor: pointer;
 }
 
-/* Select styling */
+/* ─── Select arrow ────────────────────────────────────────────────────────── */
 select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 32px !important;
+  background-position: right 14px center;
+  padding-right: 40px !important;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
+/* ─── Hide scrollbars ─────────────────────────────────────────────────────── */
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+::-webkit-scrollbar { width: 0; height: 0; }
 
-/* Safe area for bottom nav */
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* Bottom sheet slide up */
+/* ─── Bottom sheet animation ──────────────────────────────────────────────── */
 @keyframes slide-up {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
 }
-
 .animate-slide-up {
-  animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  animation: slide-up 0.22s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/* Scrollbar hide utility */
-.scrollbar-none {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+/* ─── Pulse skeleton ──────────────────────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
-}
+.animate-pulse { animation: pulse 1.5s ease-in-out infinite; }
