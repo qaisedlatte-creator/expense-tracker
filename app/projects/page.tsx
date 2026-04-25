@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { formatINR } from '@/lib/calculations'
 import type { Project, ProjectStatus } from '@/types'
@@ -21,26 +21,46 @@ export default function ProjectsPage() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<Project | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
-  const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const initialized = useRef(false)
 
-  const load = useCallback(async () => {
+  // Fetch from server — only used on mount and for cross-device realtime sync
+  async function serverSync() {
     const { data } = await supabase
       .from('projects')
       .select('*')
       .order('created_at', { ascending: false })
-    setProjects((data ?? []) as Project[])
+    if (data) setProjects(data as Project[])
     setLoading(false)
-  }, [])
+  }
 
   useEffect(() => {
-    load()
+    if (!initialized.current) {
+      initialized.current = true
+      serverSync()
+    }
+
     const ch = supabase
       .channel('projects-rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'projects' }, (payload) => {
+        const incoming = payload.new as Project
+        setProjects((prev) => {
+          // Skip if we already have it (our own optimistic add)
+          if (prev.some((p) => p.id === incoming.id)) return prev
+          return [incoming, ...prev]
+        })
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'projects' }, (payload) => {
+        const updated = payload.new as Project
+        setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'projects' }, (payload) => {
+        setProjects((prev) => prev.filter((p) => p.id !== (payload.old as Project).id))
+      })
       .subscribe()
+
     return () => { supabase.removeChannel(ch) }
-  }, [load])
+  }, [])
 
   function openAdd() {
     setEditing(null)
@@ -61,8 +81,8 @@ export default function ProjectsPage() {
   }
 
   async function handleSave() {
-    if (!form.name || !form.amount) return
-    setSaving(true)
+    if (!form.name.trim() || !form.amount) return
+
     const payload = {
       name: form.name.trim(),
       amount: parseFloat(form.amount),
@@ -70,26 +90,50 @@ export default function ProjectsPage() {
       date: form.date,
       notes: form.notes.trim() || null,
     }
+
     if (editing) {
-      await supabase.from('projects').update(payload).eq('id', editing.id)
+      // Optimistic update — instant
+      setProjects((prev) =>
+        prev.map((p) => (p.id === editing.id ? { ...p, ...payload } : p))
+      )
+      setSheetOpen(false)
+      supabase.from('projects').update(payload).eq('id', editing.id).then(() => serverSync())
     } else {
-      await supabase.from('projects').insert(payload)
+      // Optimistic insert with temp ID — instant
+      const tempId = `temp-${Date.now()}`
+      const tempProject: Project = {
+        ...payload,
+        id: tempId,
+        notes: payload.notes,
+        created_at: new Date().toISOString(),
+      }
+      setProjects((prev) => [tempProject, ...prev])
+      setSheetOpen(false)
+      // Confirm with server and replace temp ID with real ID
+      const { data } = await supabase.from('projects').insert(payload).select().single()
+      if (data) {
+        setProjects((prev) =>
+          prev.map((p) => (p.id === tempId ? (data as Project) : p))
+        )
+      } else {
+        // Rollback on error
+        setProjects((prev) => prev.filter((p) => p.id !== tempId))
+      }
     }
-    setSaving(false)
-    setSheetOpen(false)
-    load()
   }
 
-  async function handleStatusToggle(id: string, newStatus: ProjectStatus) {
-    await supabase.from('projects').update({ status: newStatus }).eq('id', id)
-    load()
+  function handleStatusToggle(id: string, newStatus: ProjectStatus) {
+    // Optimistic — instant tap response
+    setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, status: newStatus } : p)))
+    supabase.from('projects').update({ status: newStatus }).eq('id', id)
   }
 
   async function handleDelete(id: string) {
     if (confirmDelete === id) {
-      await supabase.from('projects').delete().eq('id', id)
+      // Optimistic remove — instant
+      setProjects((prev) => prev.filter((p) => p.id !== id))
       setConfirmDelete(null)
-      load()
+      supabase.from('projects').delete().eq('id', id)
     } else {
       setConfirmDelete(id)
       setTimeout(() => setConfirmDelete(null), 3000)
@@ -102,7 +146,6 @@ export default function ProjectsPage() {
 
   return (
     <div className="px-4 pt-6 pb-32 max-w-md mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Projects</h1>
@@ -127,7 +170,6 @@ export default function ProjectsPage() {
         </div>
       ) : (
         <>
-          {/* Confirmed / Paid */}
           {confirmed.length > 0 && (
             <div className="mb-5">
               <p className="text-[11px] uppercase tracking-widest text-[#444] mb-2">Active</p>
@@ -151,7 +193,6 @@ export default function ProjectsPage() {
             </div>
           )}
 
-          {/* Pending */}
           {pending.length > 0 && (
             <div>
               <p className="text-[11px] uppercase tracking-widest text-[#444] mb-2">Pending</p>
@@ -177,7 +218,6 @@ export default function ProjectsPage() {
         </>
       )}
 
-      {/* Form sheet */}
       <BottomSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
@@ -220,9 +260,7 @@ export default function ProjectsPage() {
                   key={s}
                   onClick={() => setForm({ ...form, status: s })}
                   className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${
-                    form.status === s
-                      ? 'bg-white text-black border-white'
-                      : 'bg-black text-[#666] border-[#333]'
+                    form.status === s ? 'bg-white text-black border-white' : 'bg-black text-[#666] border-[#333]'
                   }`}
                 >
                   {s}
@@ -232,9 +270,7 @@ export default function ProjectsPage() {
           </div>
 
           <div>
-            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">
-              Date
-            </label>
+            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">Date</label>
             <input
               type="date"
               value={form.date}
@@ -258,10 +294,10 @@ export default function ProjectsPage() {
 
           <button
             onClick={handleSave}
-            disabled={saving || !form.name || !form.amount}
-            className="w-full bg-white text-black font-bold py-3 rounded-lg text-sm disabled:opacity-40 transition-opacity"
+            disabled={!form.name.trim() || !form.amount}
+            className="w-full bg-white text-black font-bold py-3 rounded-lg text-sm disabled:opacity-40"
           >
-            {saving ? 'Saving...' : editing ? 'Save Changes' : 'Add Project'}
+            {editing ? 'Save Changes' : 'Add Project'}
           </button>
         </div>
       </BottomSheet>

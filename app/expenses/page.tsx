@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { formatINR, categoryPercents } from '@/lib/calculations'
 import type { Expense, ExpenseCategory, ExpenseType, Project } from '@/types'
@@ -30,27 +30,45 @@ export default function ExpensesPage() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
-  const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const initialized = useRef(false)
 
-  const load = useCallback(async () => {
+  async function serverSync() {
     const [{ data: exp }, { data: proj }] = await Promise.all([
       supabase.from('expenses').select('*').order('date', { ascending: false }),
       supabase.from('projects').select('*').order('name'),
     ])
-    setExpenses((exp ?? []) as Expense[])
-    setProjects((proj ?? []) as Project[])
+    if (exp) setExpenses(exp as Expense[])
+    if (proj) setProjects(proj as Project[])
     setLoading(false)
-  }, [])
+  }
 
   useEffect(() => {
-    load()
+    if (!initialized.current) {
+      initialized.current = true
+      serverSync()
+    }
+
     const ch = supabase
       .channel('expenses-rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'expenses' }, (payload) => {
+        const incoming = payload.new as Expense
+        setExpenses((prev) => {
+          if (prev.some((e) => e.id === incoming.id)) return prev
+          return [incoming, ...prev]
+        })
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'expenses' }, (payload) => {
+        const updated = payload.new as Expense
+        setExpenses((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'expenses' }, (payload) => {
+        setExpenses((prev) => prev.filter((e) => e.id !== (payload.old as Expense).id))
+      })
       .subscribe()
+
     return () => { supabase.removeChannel(ch) }
-  }, [load])
+  }, [])
 
   function openAdd() {
     setEditing(null)
@@ -74,8 +92,8 @@ export default function ExpensesPage() {
   }
 
   async function handleSave() {
-    if (!form.name || !form.amount) return
-    setSaving(true)
+    if (!form.name.trim() || !form.amount) return
+
     const payload = {
       name: form.name.trim(),
       category: form.category,
@@ -86,21 +104,40 @@ export default function ExpensesPage() {
       date: form.date,
       notes: form.notes.trim() || null,
     }
+
     if (editing) {
-      await supabase.from('expenses').update(payload).eq('id', editing.id)
+      setExpenses((prev) =>
+        prev.map((e) => (e.id === editing.id ? { ...e, ...payload } : e))
+      )
+      setSheetOpen(false)
+      supabase.from('expenses').update(payload).eq('id', editing.id).then(() => serverSync())
     } else {
-      await supabase.from('expenses').insert(payload)
+      const tempId = `temp-${Date.now()}`
+      const tempExpense: Expense = {
+        ...payload,
+        id: tempId,
+        platform: payload.platform,
+        notes: payload.notes,
+        created_at: new Date().toISOString(),
+      }
+      setExpenses((prev) => [tempExpense, ...prev])
+      setSheetOpen(false)
+      const { data } = await supabase.from('expenses').insert(payload).select().single()
+      if (data) {
+        setExpenses((prev) =>
+          prev.map((e) => (e.id === tempId ? (data as Expense) : e))
+        )
+      } else {
+        setExpenses((prev) => prev.filter((e) => e.id !== tempId))
+      }
     }
-    setSaving(false)
-    setSheetOpen(false)
-    load()
   }
 
   async function handleDelete(id: string) {
     if (confirmDelete === id) {
-      await supabase.from('expenses').delete().eq('id', id)
+      setExpenses((prev) => prev.filter((e) => e.id !== id))
       setConfirmDelete(null)
-      load()
+      supabase.from('expenses').delete().eq('id', id)
     } else {
       setConfirmDelete(id)
       setTimeout(() => setConfirmDelete(null), 3000)
@@ -115,16 +152,14 @@ export default function ExpensesPage() {
 
   const total = filtered.reduce((s, e) => s + e.amount, 0)
   const breakdown = categoryPercents(expenses)
-
   const projectOptions = ['General', ...projects.map((p) => p.name)]
 
   return (
     <div className="px-4 pt-6 pb-32 max-w-md mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Expenses</h1>
-          <p className="text-xs text-[#555] mt-0.5">Total: {formatINR(total)}</p>
+          <p className="text-xs text-[#555] mt-0.5">Showing: {formatINR(total)}</p>
         </div>
         <button
           onClick={openAdd}
@@ -143,7 +178,6 @@ export default function ExpensesPage() {
                 key={b.category}
                 style={{ width: `${b.pct}%`, opacity: 1 - i * 0.2 }}
                 className="bg-white"
-                title={`${b.category}: ${b.pct.toFixed(0)}%`}
               />
             ))}
           </div>
@@ -157,20 +191,12 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-none">
-        <button
-          onClick={() => setFilterCat('All')}
-          className={`text-[10px] px-2.5 py-1 rounded-full border whitespace-nowrap transition-all ${
-            filterCat === 'All' ? 'bg-white text-black border-white font-bold' : 'border-[#333] text-[#666]'
-          }`}
-        >
-          All
-        </button>
-        {CATEGORIES.map((c) => (
+      {/* Category filters */}
+      <div className="flex gap-2 mb-3 overflow-x-auto pb-1 scrollbar-none">
+        {(['All', ...CATEGORIES] as const).map((c) => (
           <button
             key={c}
-            onClick={() => setFilterCat(filterCat === c ? 'All' : c)}
+            onClick={() => setFilterCat(c === 'All' ? 'All' : (filterCat === c ? 'All' : c))}
             className={`text-[10px] px-2.5 py-1 rounded-full border whitespace-nowrap transition-all ${
               filterCat === c ? 'bg-white text-black border-white font-bold' : 'border-[#333] text-[#666]'
             }`}
@@ -184,7 +210,7 @@ export default function ExpensesPage() {
       <div className="flex gap-2 mb-5 overflow-x-auto pb-1 scrollbar-none">
         <button
           onClick={() => setFilterProject('All')}
-          className={`text-[10px] px-2.5 py-1 rounded border whitespace-nowrap transition-all ${
+          className={`text-[10px] px-2.5 py-1 rounded border whitespace-nowrap ${
             filterProject === 'All' ? 'bg-white text-black border-white font-bold' : 'border-[#2a2a2a] text-[#555]'
           }`}
         >
@@ -194,7 +220,7 @@ export default function ExpensesPage() {
           <button
             key={p}
             onClick={() => setFilterProject(filterProject === p ? 'All' : p)}
-            className={`text-[10px] px-2.5 py-1 rounded border whitespace-nowrap transition-all ${
+            className={`text-[10px] px-2.5 py-1 rounded border whitespace-nowrap ${
               filterProject === p ? 'bg-white text-black border-white font-bold' : 'border-[#2a2a2a] text-[#555]'
             }`}
           >
@@ -203,7 +229,6 @@ export default function ExpensesPage() {
         ))}
       </div>
 
-      {/* Expense list */}
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="w-5 h-5 border border-white border-t-transparent rounded-full animate-spin" />
@@ -230,7 +255,6 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* Form sheet */}
       <BottomSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
@@ -238,9 +262,7 @@ export default function ExpensesPage() {
       >
         <div className="flex flex-col gap-4">
           <div>
-            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">
-              Expense Name
-            </label>
+            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">Name</label>
             <input
               type="text"
               value={form.name}
@@ -251,18 +273,14 @@ export default function ExpensesPage() {
           </div>
 
           <div>
-            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">
-              Category
-            </label>
+            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">Category</label>
             <div className="grid grid-cols-4 gap-1.5">
               {CATEGORIES.map((c) => (
                 <button
                   key={c}
                   onClick={() => setForm({ ...form, category: c })}
                   className={`py-2 text-xs font-bold rounded-lg border transition-all ${
-                    form.category === c
-                      ? 'bg-white text-black border-white'
-                      : 'bg-black text-[#666] border-[#333]'
+                    form.category === c ? 'bg-white text-black border-white' : 'bg-black text-[#666] border-[#333]'
                   }`}
                 >
                   {c}
@@ -273,9 +291,7 @@ export default function ExpensesPage() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">
-                Platform (optional)
-              </label>
+              <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">Platform</label>
               <input
                 type="text"
                 value={form.platform}
@@ -285,9 +301,7 @@ export default function ExpensesPage() {
               />
             </div>
             <div>
-              <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">
-                Amount (₹)
-              </label>
+              <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">Amount (₹)</label>
               <input
                 type="number"
                 value={form.amount}
@@ -299,18 +313,14 @@ export default function ExpensesPage() {
           </div>
 
           <div>
-            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">
-              Type
-            </label>
+            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">Type</label>
             <div className="flex gap-2">
               {TYPES.map((t) => (
                 <button
                   key={t}
                   onClick={() => setForm({ ...form, type: t })}
                   className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${
-                    form.type === t
-                      ? 'bg-white text-black border-white'
-                      : 'bg-black text-[#666] border-[#333]'
+                    form.type === t ? 'bg-white text-black border-white' : 'bg-black text-[#666] border-[#333]'
                   }`}
                 >
                   {t}
@@ -320,9 +330,7 @@ export default function ExpensesPage() {
           </div>
 
           <div>
-            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">
-              Project
-            </label>
+            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">Project</label>
             <select
               value={form.project_id}
               onChange={(e) => setForm({ ...form, project_id: e.target.value })}
@@ -335,9 +343,7 @@ export default function ExpensesPage() {
           </div>
 
           <div>
-            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">
-              Date
-            </label>
+            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">Date</label>
             <input
               type="date"
               value={form.date}
@@ -347,9 +353,7 @@ export default function ExpensesPage() {
           </div>
 
           <div>
-            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">
-              Notes (optional)
-            </label>
+            <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">Notes (optional)</label>
             <input
               type="text"
               value={form.notes}
@@ -361,10 +365,10 @@ export default function ExpensesPage() {
 
           <button
             onClick={handleSave}
-            disabled={saving || !form.name || !form.amount}
-            className="w-full bg-white text-black font-bold py-3 rounded-lg text-sm disabled:opacity-40 transition-opacity"
+            disabled={!form.name.trim() || !form.amount}
+            className="w-full bg-white text-black font-bold py-3 rounded-lg text-sm disabled:opacity-40"
           >
-            {saving ? 'Saving...' : editing ? 'Save Changes' : 'Add Expense'}
+            {editing ? 'Save Changes' : 'Add Expense'}
           </button>
         </div>
       </BottomSheet>
