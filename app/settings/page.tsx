@@ -8,26 +8,26 @@ interface SettingsForm {
   starting_capital: string
   monthly_overhead: string
   weekly_ad_budget: string
-  currency_symbol: string
-  business_name: string
+  currency_symbol:  string
+  business_name:    string
 }
 
 const DEFAULTS: SettingsForm = {
   starting_capital: '20000',
   monthly_overhead: '2000',
   weekly_ad_budget: '1500',
-  currency_symbol: '₹',
-  business_name: 'Webbes',
+  currency_symbol:  '₹',
+  business_name:    'Webbes',
 }
 
 export default function SettingsPage() {
   const router = useRouter()
-  const [form, setForm] = useState<SettingsForm>(DEFAULTS)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [resetStep, setResetStep] = useState(0)
-  const [resetting, setResetting] = useState(false)
+  const [form,       setForm]       = useState<SettingsForm>(DEFAULTS)
+  const [loading,    setLoading]    = useState(true)
+  const [saving,     setSaving]     = useState(false)
+  const [saved,      setSaved]      = useState(false)
+  const [resetStep,  setResetStep]  = useState(0)
+  const [resetting,  setResetting]  = useState(false)
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('settings').select('*')
@@ -48,10 +48,7 @@ export default function SettingsPage() {
     const entries = Object.entries(form).map(([key, value]) => ({ key, value }))
     await Promise.all(
       entries.map(({ key, value }) =>
-        supabase
-          .from('settings')
-          .upsert({ key, value, updated_at: new Date().toISOString() })
-          .eq('key', key)
+        supabase.from('settings').upsert({ key, value, updated_at: new Date().toISOString() }).eq('key', key)
       )
     )
     setSaving(false)
@@ -60,14 +57,8 @@ export default function SettingsPage() {
   }
 
   async function handleReset() {
-    if (resetStep === 0) {
-      setResetStep(1)
-      return
-    }
-    if (resetStep === 1) {
-      setResetStep(2)
-      return
-    }
+    if (resetStep === 0) { setResetStep(1); return }
+    if (resetStep === 1) { setResetStep(2); return }
     setResetting(true)
     await Promise.all([
       supabase.from('projects').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
@@ -75,9 +66,7 @@ export default function SettingsPage() {
       supabase.from('ad_spend').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
     ])
     const defaults = Object.entries(DEFAULTS).map(([key, value]) => ({
-      key,
-      value,
-      updated_at: new Date().toISOString(),
+      key, value, updated_at: new Date().toISOString(),
     }))
     await supabase.from('settings').upsert(defaults)
     setForm(DEFAULTS)
@@ -89,7 +78,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="w-5 h-5 border border-white border-t-transparent rounded-full animate-spin" />
+        <div className="w-5 h-5 rounded-full animate-spin" style={{ border: '2px solid var(--bdr)', borderTopColor: 'rgb(var(--ac))' }} />
       </div>
     )
   }
@@ -98,49 +87,39 @@ export default function SettingsPage() {
 
   return (
     <div className="px-4 pt-6 pb-32 max-w-md mx-auto">
-      <h1 className="text-xl font-bold tracking-tight mb-1">Settings</h1>
-      <p className="text-xs text-[#555] mb-6">Shared across all devices</p>
+      <h1 className="text-xl font-bold tracking-tight text-tx mb-1">Settings</h1>
+      <p className="text-xs text-t4 mb-6">Shared across all devices</p>
 
       <div className="flex flex-col gap-4 mb-8">
-        <Field
-          label="Business Name"
-          type="text"
+        <Field label="Business Name" type="text"
           value={form.business_name}
-          onChange={(v) => setForm({ ...form, business_name: v })}
+          onChange={v => setForm({ ...form, business_name: v })}
           placeholder="Webbes"
         />
-        <Field
-          label="Currency Symbol"
-          type="text"
+        <Field label="Currency Symbol" type="text"
           value={form.currency_symbol}
-          onChange={(v) => setForm({ ...form, currency_symbol: v })}
+          onChange={v => setForm({ ...form, currency_symbol: v })}
           placeholder="₹"
         />
 
-        <div className="border-t border-[#1a1a1a] pt-4">
-          <p className="text-[11px] uppercase tracking-widest text-[#444] mb-3">Financial</p>
+        <div className="border-t border-bdf pt-4">
+          <p className="text-[11px] uppercase tracking-widest text-t5 mb-3">Financial</p>
           <div className="flex flex-col gap-4">
-            <Field
-              label="Starting Capital (₹)"
-              type="number"
+            <Field label="Starting Capital (₹)" type="number"
               value={form.starting_capital}
-              onChange={(v) => setForm({ ...form, starting_capital: v })}
+              onChange={v => setForm({ ...form, starting_capital: v })}
               placeholder="20000"
               hint="The initial budget you started with"
             />
-            <Field
-              label="Monthly Overhead (₹)"
-              type="number"
+            <Field label="Monthly Overhead (₹)" type="number"
               value={form.monthly_overhead}
-              onChange={(v) => setForm({ ...form, monthly_overhead: v })}
+              onChange={v => setForm({ ...form, monthly_overhead: v })}
               placeholder="2000"
               hint="Fixed recurring costs per month (tools, subscriptions)"
             />
-            <Field
-              label="Weekly Ad Budget Cap (₹)"
-              type="number"
+            <Field label="Weekly Ad Budget Cap (₹)" type="number"
               value={form.weekly_ad_budget}
-              onChange={(v) => setForm({ ...form, weekly_ad_budget: v })}
+              onChange={v => setForm({ ...form, weekly_ad_budget: v })}
               placeholder="1500"
               hint="Total weekly cap across all ad platforms"
             />
@@ -151,36 +130,32 @@ export default function SettingsPage() {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full bg-white text-black font-bold py-3 rounded-lg text-sm disabled:opacity-40 mb-3"
+        className="w-full bg-ac text-acf font-bold py-3 rounded-lg text-sm disabled:opacity-40 mb-3"
       >
         {saved ? '✓ Saved' : saving ? 'Saving...' : 'Save Settings'}
       </button>
 
-      {/* Reset */}
-      <div className="border-t border-[#1a1a1a] pt-5 mt-5">
-        <p className="text-[11px] uppercase tracking-widest text-[#444] mb-3">Danger Zone</p>
+      <div className="border-t border-bdf pt-5 mt-5">
+        <p className="text-[11px] uppercase tracking-widest text-t5 mb-3">Danger Zone</p>
         <button
           onClick={handleReset}
           disabled={resetting}
           className={`w-full py-3 rounded-lg text-sm font-bold border transition-all disabled:opacity-40 ${
             resetStep === 0
-              ? 'border-[#333] text-[#666]'
+              ? 'border-bds text-t3'
               : resetStep === 1
-              ? 'border-white text-white'
-              : 'bg-white text-black border-white'
+              ? 'border-ac text-tx'
+              : 'bg-ac text-acf border-ac'
           }`}
         >
           {resetting ? 'Resetting...' : resetLabels[resetStep]}
         </button>
         {resetStep > 0 && (
-          <button
-            onClick={() => setResetStep(0)}
-            className="w-full text-xs text-[#555] mt-2 py-2"
-          >
+          <button onClick={() => setResetStep(0)} className="w-full text-xs text-t4 mt-2 py-2">
             Cancel
           </button>
         )}
-        <p className="text-[10px] text-[#333] mt-2 text-center">
+        <p className="text-[10px] text-t6 mt-2 text-center">
           Deletes all projects, expenses, and ad spend data
         </p>
       </div>
@@ -189,33 +164,28 @@ export default function SettingsPage() {
 }
 
 function Field({
-  label,
-  type,
-  value,
-  onChange,
-  placeholder,
-  hint,
+  label, type, value, onChange, placeholder, hint,
 }: {
-  label: string
-  type: string
-  value: string
-  onChange: (v: string) => void
-  placeholder: string
-  hint?: string
+  label: string; type: string; value: string
+  onChange: (v: string) => void; placeholder: string; hint?: string
 }) {
   return (
     <div>
-      <label className="text-[11px] uppercase tracking-widest text-[#666] block mb-1.5">
-        {label}
-      </label>
+      <label className="text-[11px] uppercase tracking-widest text-t3 block mb-1.5">{label}</label>
       <input
         type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-[#111] border border-[#222] rounded-lg px-3 py-2.5 text-sm text-white placeholder-[#444] focus:outline-none focus:border-white"
+        className="w-full rounded-lg px-3 py-2.5 text-sm focus:outline-none"
+        style={{
+          background:    'var(--surface)',
+          border:        '1px solid var(--bdr)',
+          color:         'var(--tx)',
+          outlineColor:  'rgb(var(--ac))',
+        }}
       />
-      {hint && <p className="text-[10px] text-[#444] mt-1">{hint}</p>}
+      {hint && <p className="text-[10px] text-t5 mt-1">{hint}</p>}
     </div>
   )
 }

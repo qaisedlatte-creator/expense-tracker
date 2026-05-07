@@ -2,9 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Design tokens ──────────────────────────────────────────────────────────── */
+/* Colors that need Tailwind opacity-modifier support are stored as RGB channels.
+   Colors that don't need it use hex. */
+
 :root {
   --font-space-grotesk: 'Space Grotesk', sans-serif;
+
+  /* Page background — RGB format so bg-bg/95 works */
+  --bg: 0 0 0;
+
+  /* Card / surface */
+  --surface:  #111111;
+  --sheet:    #0d0d0d;
+
+  /* Borders — faint → very strong */
+  --bdf: #1a1a1a;
+  --bdr: #222222;
+  --bdh: #2a2a2a;
+  --bds: #333333;
+  --bda: #444444;
+
+  /* Text levels — primary → ghost */
+  --tx:  #ffffff;
+  --t2:  #888888;
+  --t3:  #666666;
+  --t4:  #555555;
+  --t5:  #444444;
+  --t6:  #333333;
+  --ph:  #3a3a3a;
+
+  /* Accent — RGB format so bg-ac/5, border-ac/20 work */
+  --ac:  255 255 255;   /* white in dark mode  */
+  --acf: 0   0   0;    /* black in dark mode  */
 }
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: 255 255 255;
+
+    --surface:  #f4f4f5;
+    --sheet:    #ececec;
+
+    --bdf: #ebebeb;
+    --bdr: #e4e4e7;
+    --bdh: #d4d4d8;
+    --bds: #c4c4c8;
+    --bda: #a1a1aa;
+
+    --tx:  #09090b;
+    --t2:  #71717a;
+    --t3:  #52525b;
+    --t4:  #3f3f46;
+    --t5:  #27272a;
+    --t6:  #18181b;
+    --ph:  #a1a1aa;
+
+    --ac:  0   0   0;    /* black in light mode */
+    --acf: 255 255 255;  /* white in light mode */
+  }
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────────── */
 
 * {
   box-sizing: border-box;
@@ -12,31 +71,43 @@
 }
 
 html {
-  background: #000;
-  /* Prevent overscroll bounce showing white */
+  background: rgb(var(--bg));
   overscroll-behavior: none;
 }
 
 body {
-  background: #000;
-  color: #fff;
+  background: rgb(var(--bg));
+  color: var(--tx);
   font-family: var(--font-space-grotesk), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Reserve space for bottom nav + iPhone home indicator */
   padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
 }
 
-/* ─── Shared input style ─────────────────────────────────────────────────── */
-/* Use class="input" on all form fields */
+/* ─── Shared input style ─────────────────────────────────────────────────────── */
 @layer components {
   .input {
-    @apply w-full bg-black border border-[#2a2a2a] rounded-xl px-4 py-3.5 text-base text-white placeholder-[#3a3a3a] focus:outline-none focus:border-white transition-colors;
+    @apply w-full rounded-xl px-4 py-3.5 text-base focus:outline-none transition-colors;
     min-height: 52px;
+    background-color: rgb(var(--bg));
+    border: 1px solid var(--bdh);
+    color: var(--tx);
+  }
+  .input::placeholder { color: var(--ph); }
+  .input:focus        { border-color: rgb(var(--ac)); }
+
+  textarea.input { resize: none; }
+
+  select.input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 40px !important;
   }
 }
 
-/* ─── Remove spinners from number inputs ──────────────────────────────────── */
+/* ─── Remove spinners ────────────────────────────────────────────────────────── */
 input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button {
   -webkit-appearance: none;
@@ -44,28 +115,25 @@ input[type='number']::-webkit-outer-spin-button {
 }
 input[type='number'] { -moz-appearance: textfield; }
 
-/* ─── Date picker icon ────────────────────────────────────────────────────── */
+/* ─── Date picker icon ───────────────────────────────────────────────────────── */
 input[type='date']::-webkit-calendar-picker-indicator {
   filter: invert(1);
   opacity: 0.3;
   cursor: pointer;
 }
-
-/* ─── Select arrow ────────────────────────────────────────────────────────── */
-select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 14px center;
-  padding-right: 40px !important;
+@media (prefers-color-scheme: light) {
+  input[type='date']::-webkit-calendar-picker-indicator {
+    filter: none;
+    opacity: 0.5;
+  }
 }
 
-/* ─── Hide scrollbars ─────────────────────────────────────────────────────── */
+/* ─── Hide scrollbars ────────────────────────────────────────────────────────── */
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
 ::-webkit-scrollbar { width: 0; height: 0; }
 
-/* ─── Bottom sheet animation ──────────────────────────────────────────────── */
+/* ─── Bottom-sheet animation ─────────────────────────────────────────────────── */
 @keyframes slide-up {
   from { transform: translateY(100%); opacity: 0; }
   to   { transform: translateY(0);   opacity: 1; }
@@ -74,9 +142,9 @@ select {
   animation: slide-up 0.22s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/* ─── Pulse skeleton ──────────────────────────────────────────────────────── */
+/* ─── Skeleton pulse ─────────────────────────────────────────────────────────── */
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50%       { opacity: 0.4; }
 }
 .animate-pulse { animation: pulse 1.5s ease-in-out infinite; }

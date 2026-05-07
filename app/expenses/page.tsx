@@ -9,38 +9,36 @@ import ExpenseRow from '@/components/ExpenseRow'
 import BottomSheet from '@/components/BottomSheet'
 
 const CATEGORIES: ExpenseCategory[] = ['Ads', 'Tools', 'Domain', 'Other']
-const TYPES: ExpenseType[] = ['One-Time', 'Monthly', 'Variable']
-const CACHE_KEY = 'expenses'
-const PROJ_CACHE = 'projects'
+const TYPES: ExpenseType[]          = ['One-Time', 'Monthly', 'Variable']
 
 const EMPTY_FORM = {
-  name: '',
-  category: 'Ads' as ExpenseCategory,
-  platform: '',
-  amount: '',
-  type: 'One-Time' as ExpenseType,
+  name:       '',
+  category:   'Ads' as ExpenseCategory,
+  platform:   '',
+  amount:     '',
+  type:       'One-Time' as ExpenseType,
   project_id: 'General',
-  date: new Date().toISOString().split('T')[0],
-  notes: '',
+  date:       new Date().toISOString().split('T')[0],
+  notes:      '',
 }
 
 export default function ExpensesPage() {
-  const [expenses, setExpenses] = useState<Expense[]>(() => fromCache<Expense[]>(CACHE_KEY, []))
-  const [projects, setProjects] = useState<Project[]>(() => fromCache<Project[]>(PROJ_CACHE, []))
-  const [loading, setLoading] = useState(expenses.length === 0)
-  const [syncing, setSyncing] = useState(false)
-  const [filterCat, setFilterCat] = useState<ExpenseCategory | 'All'>('All')
+  const [expenses, setExpenses] = useState<Expense[]>(() => fromCache<Expense[]>('expenses', []))
+  const [projects, setProjects] = useState<Project[]>(() => fromCache<Project[]>('projects', []))
+  const [loading,  setLoading]  = useState(expenses.length === 0)
+  const [syncing,  setSyncing]  = useState(false)
+  const [filterCat,     setFilterCat]     = useState<ExpenseCategory | 'All'>('All')
   const [filterProject, setFilterProject] = useState('All')
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [editing, setEditing] = useState<Expense | null>(null)
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [sheetOpen,     setSheetOpen]     = useState(false)
+  const [editing,       setEditing]       = useState<Expense | null>(null)
+  const [form,          setForm]          = useState(EMPTY_FORM)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const didMount = useRef(false)
 
   function saveExpenses(updater: (prev: Expense[]) => Expense[]) {
     setExpenses(prev => {
       const next = updater(prev)
-      cache.set(CACHE_KEY, next)
+      cache.set('expenses', next)
       return next
     })
   }
@@ -52,14 +50,8 @@ export default function ExpensesPage() {
       supabase.from('projects').select('*').order('name'),
     ])
     setSyncing(false)
-    if (!e1 && exp) {
-      setExpenses(exp as Expense[])
-      cache.set(CACHE_KEY, exp)
-    }
-    if (!e2 && proj) {
-      setProjects(proj as Project[])
-      cache.set(PROJ_CACHE, proj)
-    }
+    if (!e1 && exp) { setExpenses(exp as Expense[]); cache.set('expenses', exp) }
+    if (!e2 && proj) { setProjects(proj as Project[]); cache.set('projects', proj) }
     setLoading(false)
   }
 
@@ -95,32 +87,32 @@ export default function ExpensesPage() {
   function openEdit(expense: Expense) {
     setEditing(expense)
     setForm({
-      name: expense.name,
-      category: expense.category,
-      platform: expense.platform ?? '',
-      amount: String(expense.amount),
-      type: expense.type,
+      name:       expense.name,
+      category:   expense.category,
+      platform:   expense.platform ?? '',
+      amount:     String(expense.amount),
+      type:       expense.type,
       project_id: expense.project_id ?? 'General',
-      date: expense.date,
-      notes: expense.notes ?? '',
+      date:       expense.date,
+      notes:      expense.notes ?? '',
     })
     setSheetOpen(true)
   }
 
   async function handleSave() {
-    const name = form.name.trim()
+    const name   = form.name.trim()
     const amount = parseFloat(form.amount)
     if (!name || !amount) return
 
     const payload = {
       name,
-      category: form.category,
-      platform: form.platform.trim() || null,
+      category:   form.category,
+      platform:   form.platform.trim() || null,
       amount,
-      type: form.type,
+      type:       form.type,
       project_id: form.project_id || 'General',
-      date: form.date,
-      notes: form.notes.trim() || null,
+      date:       form.date,
+      notes:      form.notes.trim() || null,
     }
 
     setSheetOpen(false)
@@ -129,26 +121,14 @@ export default function ExpensesPage() {
       saveExpenses(prev => prev.map(e => e.id === editing.id ? { ...e, ...payload } : e))
       supabase.from('expenses').update(payload).eq('id', editing.id).then(() => serverSync())
     } else {
-      const tempId = `tmp_${Date.now()}`
-      const tempItem: Expense = {
-        ...payload,
-        id: tempId,
-        platform: payload.platform,
-        notes: payload.notes,
-        created_at: new Date().toISOString(),
-      }
+      const tempId   = `tmp_${Date.now()}`
+      const tempItem: Expense = { ...payload, id: tempId, platform: payload.platform, notes: payload.notes, created_at: new Date().toISOString() }
       saveExpenses(prev => [tempItem, ...prev])
 
-      const { data, error } = await supabase
-        .from('expenses')
-        .insert(payload)
-        .select()
-        .single()
-
+      const { data, error } = await supabase.from('expenses').insert(payload).select().single()
       if (!error && data) {
         saveExpenses(prev => prev.map(e => e.id === tempId ? (data as Expense) : e))
       }
-      // No rollback — item stays in local cache even if server fails
     }
   }
 
@@ -164,13 +144,13 @@ export default function ExpensesPage() {
   }
 
   const filtered = expenses.filter(e => {
-    if (filterCat !== 'All' && e.category !== filterCat) return false
+    if (filterCat     !== 'All' && e.category !== filterCat) return false
     if (filterProject !== 'All' && (e.project_id ?? 'General') !== filterProject) return false
     return true
   })
 
-  const total = filtered.reduce((s, e) => s + e.amount, 0)
-  const breakdown = categoryPercents(expenses)
+  const total          = filtered.reduce((s, e) => s + e.amount, 0)
+  const breakdown      = categoryPercents(expenses)
   const projectOptions = ['General', ...projects.map(p => p.name)]
 
   return (
@@ -178,15 +158,15 @@ export default function ExpensesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-bold">Expenses</h1>
-          <p className="text-sm text-[#555] mt-0.5">
+          <h1 className="text-2xl font-bold text-tx">Expenses</h1>
+          <p className="text-sm text-t4 mt-0.5">
             {formatINR(total)} shown
-            {syncing && <span className="text-[#444] ml-2">· syncing</span>}
+            {syncing && <span className="text-t5 ml-2">· syncing</span>}
           </p>
         </div>
         <button
           onClick={openAdd}
-          className="bg-white text-black text-sm font-bold px-5 py-2.5 rounded-xl active:scale-95 transition-transform"
+          className="bg-ac text-acf text-sm font-bold px-5 py-2.5 rounded-xl active:scale-95 transition-transform"
         >
           + Add
         </button>
@@ -195,14 +175,14 @@ export default function ExpensesPage() {
       {/* Breakdown bar */}
       {expenses.length > 0 && (
         <div className="mb-5">
-          <div className="flex h-2.5 rounded-full overflow-hidden bg-[#1a1a1a] mb-2">
+          <div className="flex h-2.5 rounded-full overflow-hidden bg-bdf mb-2">
             {breakdown.map((b, i) => (
-              <div key={b.category} style={{ width: `${b.pct}%`, opacity: 1 - i * 0.2 }} className="bg-white" />
+              <div key={b.category} style={{ width: `${b.pct}%`, opacity: 1 - i * 0.2 }} className="bg-ac" />
             ))}
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {breakdown.map(b => (
-              <span key={b.category} className="text-xs text-[#555]">
+              <span key={b.category} className="text-xs text-t4">
                 {b.category} {b.pct.toFixed(0)}% · {formatINR(b.amount)}
               </span>
             ))}
@@ -217,7 +197,9 @@ export default function ExpensesPage() {
             key={c}
             onClick={() => setFilterCat(c === 'All' ? 'All' : filterCat === c ? 'All' : c)}
             className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap font-medium transition-all ${
-              filterCat === c ? 'bg-white text-black border-white' : 'border-[#2a2a2a] text-[#666]'
+              filterCat === c
+                ? 'bg-ac text-acf border-ac'
+                : 'border-bdh text-t3'
             }`}
           >
             {c}
@@ -230,7 +212,9 @@ export default function ExpensesPage() {
         <button
           onClick={() => setFilterProject('All')}
           className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap font-medium transition-all ${
-            filterProject === 'All' ? 'bg-white text-black border-white' : 'border-[#2a2a2a] text-[#666]'
+            filterProject === 'All'
+              ? 'bg-ac text-acf border-ac'
+              : 'border-bdh text-t3'
           }`}
         >
           All Projects
@@ -240,7 +224,9 @@ export default function ExpensesPage() {
             key={p}
             onClick={() => setFilterProject(filterProject === p ? 'All' : p)}
             className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap font-medium transition-all ${
-              filterProject === p ? 'bg-white text-black border-white' : 'border-[#2a2a2a] text-[#666]'
+              filterProject === p
+                ? 'bg-ac text-acf border-ac'
+                : 'border-bdh text-t3'
             }`}
           >
             {p}
@@ -252,14 +238,14 @@ export default function ExpensesPage() {
       {loading ? (
         <div className="flex flex-col gap-3">
           {[1, 2, 3, 4].map(i => (
-            <div key={i} className="bg-[#111] rounded-xl h-16 animate-pulse border border-[#1a1a1a]" />
+            <div key={i} className="bg-surface rounded-xl h-16 animate-pulse border border-bdf" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-[#333] text-3xl mb-3">—</p>
-          <p className="text-white text-base font-medium">No expenses found</p>
-          <p className="text-[#555] text-sm mt-1">
+          <p className="text-t6 text-3xl mb-3">—</p>
+          <p className="text-tx text-base font-medium">No expenses found</p>
+          <p className="text-t4 text-sm mt-1">
             {expenses.length === 0 ? 'Tap + Add to log your first expense' : 'Try a different filter'}
           </p>
         </div>
@@ -269,9 +255,7 @@ export default function ExpensesPage() {
             <div key={e.id}>
               <ExpenseRow expense={e} onEdit={openEdit} onDelete={handleDelete} />
               {confirmDelete === e.id && (
-                <p className="text-xs text-[#888] text-center py-1.5 italic">
-                  Tap delete again to confirm
-                </p>
+                <p className="text-xs text-t2 text-center py-1.5 italic">Tap delete again to confirm</p>
               )}
             </div>
           ))}
@@ -299,7 +283,9 @@ export default function ExpensesPage() {
                   key={c}
                   onClick={() => setForm({ ...form, category: c })}
                   className={`h-11 text-xs font-bold rounded-xl border transition-all ${
-                    form.category === c ? 'bg-white text-black border-white' : 'bg-black text-[#555] border-[#2a2a2a]'
+                    form.category === c
+                      ? 'bg-ac text-acf border-ac'
+                      : 'bg-bg text-t4 border-bdh'
                   }`}
                 >
                   {c}
@@ -337,7 +323,9 @@ export default function ExpensesPage() {
                   key={t}
                   onClick={() => setForm({ ...form, type: t })}
                   className={`flex-1 h-11 text-xs font-bold rounded-xl border transition-all ${
-                    form.type === t ? 'bg-white text-black border-white' : 'bg-black text-[#555] border-[#2a2a2a]'
+                    form.type === t
+                      ? 'bg-ac text-acf border-ac'
+                      : 'bg-bg text-t4 border-bdh'
                   }`}
                 >
                   {t}
@@ -378,7 +366,7 @@ export default function ExpensesPage() {
           <button
             onClick={handleSave}
             disabled={!form.name.trim() || !form.amount}
-            className="w-full h-14 bg-white text-black font-bold text-base rounded-xl disabled:opacity-30 active:scale-98 transition-all"
+            className="w-full h-14 bg-ac text-acf font-bold text-base rounded-xl disabled:opacity-30 active:scale-98 transition-all"
           >
             {editing ? 'Save Changes' : 'Add Expense'}
           </button>
@@ -391,7 +379,7 @@ export default function ExpensesPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-xs uppercase tracking-widest text-[#555] block mb-2">{label}</label>
+      <label className="text-xs uppercase tracking-widest text-t4 block mb-2">{label}</label>
       {children}
     </div>
   )

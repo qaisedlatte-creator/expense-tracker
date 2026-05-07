@@ -10,10 +10,10 @@ interface Props {
 }
 
 const CAT_LABEL: Record<string, string> = {
-  Ads: 'ADS',
-  Tools: 'TOOL',
+  Ads:    'ADS',
+  Tools:  'TOOL',
   Domain: 'DOM',
-  Other: 'OTH',
+  Other:  'OTH',
 }
 
 export default function ExpenseRow({ expense, onEdit, onDelete }: Props) {
@@ -21,22 +21,22 @@ export default function ExpenseRow({ expense, onEdit, onDelete }: Props) {
 
   return (
     <div
-      className="flex items-start justify-between gap-3 py-3 border-b border-[#1a1a1a] cursor-pointer active:bg-[#111] transition-colors px-1"
+      className="flex items-start justify-between gap-3 py-3 border-b border-bdf cursor-pointer active:bg-surface transition-colors px-1"
       onClick={() => onEdit(expense)}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-[9px] font-bold tracking-widest text-[#555] border border-[#333] px-1.5 py-0.5 rounded">
+          <span className="text-[9px] font-bold tracking-widest text-t4 border border-bds px-1.5 py-0.5 rounded">
             {CAT_LABEL[expense.category]}
           </span>
-          <p className="text-sm font-medium truncate">{expense.name}</p>
+          <p className="text-sm font-medium text-tx truncate">{expense.name}</p>
           {isMonthly && (
-            <span className="text-[9px] border border-[#444] text-[#666] px-1.5 py-0.5 rounded-full shrink-0">
+            <span className="text-[9px] border border-bda text-t3 px-1.5 py-0.5 rounded-full shrink-0">
               RECURRING
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-[#555]">
+        <div className="flex items-center gap-2 text-[11px] text-t4">
           {expense.platform && <span>{expense.platform}</span>}
           {expense.platform && <span>·</span>}
           <span>{expense.project_id ?? 'General'}</span>
@@ -44,18 +44,18 @@ export default function ExpenseRow({ expense, onEdit, onDelete }: Props) {
           <span>{expense.date}</span>
         </div>
         {expense.notes && (
-          <p className="text-[10px] text-[#444] mt-0.5 truncate">{expense.notes}</p>
+          <p className="text-[10px] text-t5 mt-0.5 truncate">{expense.notes}</p>
         )}
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
-        <p className="text-sm font-bold">{formatINR(expense.amount)}</p>
+        <p className="text-sm font-bold text-tx">{formatINR(expense.amount)}</p>
         <button
           onClick={(e) => {
             e.stopPropagation()
             onDelete(expense.id)
           }}
-          className="text-[#444] hover:text-white transition-colors"
+          className="text-t5 hover:text-tx transition-colors"
           aria-label="Delete"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

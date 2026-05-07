@@ -39,7 +39,7 @@ const tabs = [
   },
   {
     href: '/calculator',
-    label: 'Calculator',
+    label: 'Calc',
     icon: (active: boolean) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
         <rect x="4" y="2" width="16" height="20" rx="2" />
@@ -56,13 +56,28 @@ const tabs = [
       </svg>
     ),
   },
+  {
+    href: '/chat',
+    label: 'Ask AI',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+    ),
+  },
 ]
 
 export default function BottomNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-sm border-t border-[#1e1e1e]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-sm border-t border-bdf"
+      style={{
+        background: 'rgb(var(--bg) / 0.95)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
+    >
       <div className="max-w-md mx-auto flex">
         {tabs.map(tab => {
           const active = pathname === tab.href
@@ -70,10 +85,12 @@ export default function BottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-3 min-h-[60px] transition-colors ${active ? 'text-white' : 'text-[#3a3a3a]'}`}
+              className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-3 min-h-[60px] transition-colors ${
+                active ? 'text-tx' : 'text-t2'
+              }`}
             >
               {tab.icon(active)}
-              <span className={`text-[10px] tracking-wider uppercase leading-none ${active ? 'font-bold' : 'font-normal text-[#3a3a3a]'}`}>
+              <span className={`text-[10px] tracking-wider uppercase leading-none ${active ? 'font-bold' : 'font-normal'}`}>
                 {tab.label}
               </span>
             </Link>

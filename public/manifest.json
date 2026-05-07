@@ -1,0 +1,53 @@
+{
+  "name": "Webbes Finance",
+  "short_name": "Webbes",
+  "description": "Finance dashboard for Webbes Digital Agency",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "categories": ["finance", "business"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/",
+      "description": "View financial dashboard"
+    },
+    {
+      "name": "Add Project",
+      "url": "/projects",
+      "description": "Add a new project"
+    },
+    {
+      "name": "Log Expense",
+      "url": "/expenses",
+      "description": "Log a new expense"
+    },
+    {
+      "name": "Ask AI",
+      "url": "/chat",
+      "description": "Chat with finance AI"
+    }
+  ]
+}
