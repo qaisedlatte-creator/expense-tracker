@@ -16,9 +16,9 @@ import type { Project, Expense, AdSpend, Settings } from '@/types'
 import AdBudgetCard from '@/components/AdBudgetCard'
 
 const DEFAULT_SETTINGS: Settings = {
-  starting_capital: 20000,
+  starting_capital: 0,
   monthly_overhead: 2000,
-  weekly_ad_budget: 1500,
+  weekly_ad_budget: 0,
   currency_symbol: '₹',
   business_name: 'Webbes',
 }
@@ -110,14 +110,17 @@ export default function DashboardPage() {
   const overall = calcDashboard(projects, expenses, settings)
   const monthly = calcMonthlyMetrics(projects, expenses, settings)
 
-  const breakEvenPct = monthly.totalCosts > 0
+  const breakEvenPct    = monthly.totalCosts > 0
     ? Math.min((monthly.revenue / monthly.totalCosts) * 100, 100)
     : 0
-
   const weekAdSpent     = adSpend.reduce((s, a) => s + a.spent,  0)
   const weekAdBudget    = adSpend.reduce((s, a) => s + a.budget, 0)
   const weekAdRemaining = weekAdBudget - weekAdSpent
-  const runwayWarn      = overall.runway < 2 && isFinite(overall.runway)
+  const hasAdBudget     = weekAdBudget > 0 || weekAdSpent > 0
+  const bankNegative    = overall.bankBalance < 0
+
+  // All non-Paid projects: Confirmed (contracted) + Pending (unconfirmed)
+  const expectedIncome = (overall.totalRevenue - overall.paidRevenue) + overall.pendingRevenue
 
   if (loading) {
     return (
@@ -158,85 +161,122 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* ── THIS MONTH ─────────────────────────────────────────────────── */}
-      <Label>This Month</Label>
+      {/* ── ZONE 1: MONEY ──────────────────────────────────────────────────── */}
 
-      {/* Net profit hero */}
-      <div className={`rounded-2xl p-5 mb-3 ${monthly.netProfit >= 0 ? 'bg-ac' : 'bg-surface border border-bdr'}`}>
-        <p className={`text-xs uppercase tracking-widest mb-1 ${monthly.netProfit >= 0 ? 'text-acf/40' : 'text-t4'}`}>
-          Net Profit
+      {/* Bank Balance — primary financial fact */}
+      <div className="bg-ac rounded-2xl p-5 mb-3">
+        <p className="text-xs uppercase tracking-widest text-acf/40 mb-1">Money in Bank</p>
+        <p className={`text-4xl font-bold tracking-tight text-acf mb-4 ${bankNegative ? 'opacity-70' : ''}`}>
+          {bankNegative ? '−' : ''}{formatINR(Math.abs(overall.bankBalance))}
         </p>
-        <p className={`text-4xl font-bold tracking-tight ${monthly.netProfit >= 0 ? 'text-acf' : 'text-tx'}`}>
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-sm">
+            <span className="text-acf/45">Starting capital</span>
+            <span className="text-acf/55">{formatINR(settings.starting_capital)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-acf/45">+ Revenue received</span>
+            <span className="text-acf/70">{formatINR(overall.paidRevenue)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-acf/45">− Expenses paid</span>
+            <span className="text-acf/70">{formatINR(overall.totalExpenses)}</span>
+          </div>
+          <div className="flex justify-between text-sm font-bold pt-1.5 border-t border-acf/15 text-acf">
+            <span>= Current balance</span>
+            <span>{bankNegative ? '−' : ''}{formatINR(Math.abs(overall.bankBalance))}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Expected income + lifetime profit (or runway warning if in the red) */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <Card label="Expected Income">
+          {expectedIncome > 0 ? (
+            <>
+              <p className="text-2xl font-bold text-tx">{formatINR(expectedIncome)}</p>
+              <p className="text-xs text-t4 mt-1">not yet in bank</p>
+            </>
+          ) : (
+            <p className="text-sm text-t4 pt-1">No projects<br />in pipeline</p>
+          )}
+        </Card>
+        {bankNegative ? (
+          <Card label="Runway" alert>
+            <p className="text-2xl font-bold text-tx">{formatMonths(Math.abs(overall.runway))}</p>
+            <p className="text-xs text-t2 mt-1 italic">add revenue</p>
+          </Card>
+        ) : (
+          <Card label="Lifetime Profit">
+            <p className="text-2xl font-bold text-tx">{formatINR(overall.netProfit)}</p>
+            <p className="text-xs text-t4 mt-1">{formatPercent(overall.profitMargin)} all-time</p>
+          </Card>
+        )}
+      </div>
+
+      {/* This month net profit */}
+      <div className="bg-surface border border-bdr rounded-2xl p-5 mb-5">
+        <p className="text-xs uppercase tracking-widest text-t4 mb-1">
+          Net Profit — {monthly.monthName}
+        </p>
+        <p className="text-4xl font-bold tracking-tight text-tx">
           {monthly.netProfit < 0 ? '−' : ''}{formatINR(Math.abs(monthly.netProfit))}
         </p>
-        <p className={`text-sm mt-1 ${monthly.netProfit >= 0 ? 'text-acf/50' : 'text-t4'}`}>
+        <p className="text-sm text-t4 mt-1">
           {formatPercent(monthly.margin)} margin
+          {monthly.netProfit >= 0 && (
+            <span className="text-tx font-medium"> · profitable</span>
+          )}
         </p>
       </div>
 
+      {/* ── ZONE 2: ACTIVITY ───────────────────────────────────────────────── */}
+      <Label>This Month</Label>
       <div className="grid grid-cols-2 gap-3 mb-5">
-        <Card label="Made This Month">
+        <Card label="Made">
           <p className="text-2xl font-bold text-tx">{formatINR(monthly.revenue)}</p>
           {monthly.pendingRevenue > 0 && (
             <p className="text-xs text-t4 mt-1">+{formatINR(monthly.pendingRevenue)} pending</p>
           )}
         </Card>
-        <Card label="Spent This Month">
+        <Card label="Spent">
           <p className="text-2xl font-bold text-tx">{formatINR(monthly.expenses)}</p>
           <p className="text-xs text-t4 mt-1">+{formatINR(settings.monthly_overhead)} overhead</p>
         </Card>
       </div>
 
-      {/* ── BREAK-EVEN ─────────────────────────────────────────────────── */}
-      <Label>To Break Even</Label>
-      <div className="bg-surface border border-bdr rounded-2xl p-4 mb-5">
-        <div className="flex justify-between text-sm mb-2">
-          <span className="text-t3">Revenue</span>
-          <span className="font-bold text-tx">{formatINR(monthly.revenue)}</span>
-        </div>
-        <div className="h-3 bg-bdf rounded-full overflow-hidden mb-2">
-          <div className="h-full bg-ac rounded-full transition-all duration-500" style={{ width: `${breakEvenPct}%` }} />
-        </div>
-        <div className="flex justify-between text-xs text-t4 mb-3">
-          <span>0</span>
-          <span>Need {formatINR(monthly.totalCosts)}</span>
-        </div>
-        {monthly.netProfit >= 0 ? (
-          <p className="text-sm font-bold text-tx">Profitable — {formatINR(monthly.profitSurplus)} above break-even</p>
-        ) : (
-          <p className="text-sm text-t2">
-            Need <span className="text-tx font-bold">{formatINR(monthly.breakEvenGap)}</span> more to profit ({breakEvenPct.toFixed(0)}% there)
-          </p>
-        )}
-        {monthly.pendingRevenue > 0 && monthly.netProfit < 0 && (
-          <p className="text-xs text-t5 mt-2 italic border-t border-bdf pt-2">
-            Close pending projects →{' '}
-            {monthly.pendingImpact >= 0
-              ? `profit by ${formatINR(monthly.pendingImpact)}`
-              : `gap shrinks to ${formatINR(Math.abs(monthly.pendingImpact))}`}
-          </p>
-        )}
-      </div>
+      {/* To Break Even — only when the month is unprofitable */}
+      {monthly.netProfit < 0 && (
+        <>
+          <Label>To Break Even</Label>
+          <div className="bg-surface border border-bdr rounded-2xl p-4 mb-5">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-t3">Revenue</span>
+              <span className="font-bold text-tx">{formatINR(monthly.revenue)}</span>
+            </div>
+            <div className="h-3 bg-bdf rounded-full overflow-hidden mb-2">
+              <div className="h-full bg-ac rounded-full transition-all duration-500" style={{ width: `${breakEvenPct}%` }} />
+            </div>
+            <div className="flex justify-between text-xs text-t4 mb-3">
+              <span>0</span>
+              <span>Need {formatINR(monthly.totalCosts)}</span>
+            </div>
+            <p className="text-sm text-t2">
+              Need <span className="text-tx font-bold">{formatINR(monthly.breakEvenGap)}</span> more to profit ({breakEvenPct.toFixed(0)}% there)
+            </p>
+            {monthly.pendingRevenue > 0 && (
+              <p className="text-xs text-t5 mt-2 italic border-t border-bdf pt-2">
+                Close pending projects →{' '}
+                {monthly.pendingImpact >= 0
+                  ? `profit by ${formatINR(monthly.pendingImpact)}`
+                  : `gap shrinks to ${formatINR(Math.abs(monthly.pendingImpact))}`}
+              </p>
+            )}
+          </div>
+        </>
+      )}
 
-      {/* ── AD SPEND ───────────────────────────────────────────────────── */}
-      <Label>Ad Spend This Week</Label>
-      <AdBudgetCard
-        adSpend={adSpend}
-        weeklyCapTotal={settings.weekly_ad_budget}
-        onLogSpend={handleLogSpend}
-        onShiftBudget={handleShiftBudget}
-      />
-      <div className="grid grid-cols-3 gap-2 mt-2 mb-5">
-        <MiniCard label="Budget" value={formatINR(weekAdBudget)} />
-        <MiniCard label="Spent"  value={formatINR(weekAdSpent)} />
-        <MiniCard
-          label="Left"
-          value={(weekAdRemaining < 0 ? '−' : '') + formatINR(Math.abs(weekAdRemaining))}
-          alert={weekAdRemaining < 0}
-        />
-      </div>
-
-      {/* ── LATEST PROJECT ─────────────────────────────────────────────── */}
+      {/* Latest Project */}
       {monthly.latestProject && (
         <>
           <Label>Latest Project</Label>
@@ -257,14 +297,36 @@ export default function DashboardPage() {
                 </span>
               </div>
               <p className="text-xs text-t5 mt-2">
-                {monthly.projectCount} total project{monthly.projectCount !== 1 ? 's' : ''}
+                {monthly.projectCount} total project{monthly.projectCount !== 1 ? 's' : ''} · {monthly.activeProjectCount} active
               </p>
             </div>
           </Link>
         </>
       )}
 
-      {/* ── AGENCY BENCHMARK ───────────────────────────────────────────── */}
+      {/* Ad Spend — only when there is an active budget */}
+      {hasAdBudget && (
+        <>
+          <Label>Ad Spend This Week</Label>
+          <AdBudgetCard
+            adSpend={adSpend}
+            weeklyCapTotal={settings.weekly_ad_budget}
+            onLogSpend={handleLogSpend}
+            onShiftBudget={handleShiftBudget}
+          />
+          <div className="grid grid-cols-3 gap-2 mt-2 mb-5">
+            <MiniCard label="Budget" value={formatINR(weekAdBudget)} />
+            <MiniCard label="Spent"  value={formatINR(weekAdSpent)} />
+            <MiniCard
+              label="Left"
+              value={(weekAdRemaining < 0 ? '−' : '') + formatINR(Math.abs(weekAdRemaining))}
+              alert={weekAdRemaining < 0}
+            />
+          </div>
+        </>
+      )}
+
+      {/* ── ZONE 3: HEALTH ─────────────────────────────────────────────────── */}
       <Label>vs Industry</Label>
       <div className="bg-surface border border-bdr rounded-2xl p-4 mb-5">
         <div className="flex justify-between items-end mb-3">
@@ -301,8 +363,19 @@ export default function DashboardPage() {
           </p>
         )}
 
-        {/* ₹25k milestone */}
-        <div className="mt-4 pt-3 border-t border-bdf">
+        {/* Cost per ₹1 earned */}
+        {monthly.revenue > 0 && monthly.expenses > 0 && (
+          <div className="mt-3 pt-3 border-t border-bdf flex justify-between items-center">
+            <div>
+              <p className="text-sm text-t2">Cost per ₹1 earned</p>
+              <p className="text-xs text-t5 mt-0.5">Healthy agencies keep this under ₹0.60</p>
+            </div>
+            <p className="text-base font-bold text-tx">₹{(monthly.expenses / monthly.revenue).toFixed(2)}</p>
+          </div>
+        )}
+
+        {/* ₹25k/month milestone */}
+        <div className="mt-3 pt-3 border-t border-bdf">
           <div className="flex justify-between text-xs mb-1.5">
             <span className="text-t4">₹25k/month milestone</span>
             <span className="font-bold text-tx">{((monthly.revenue / 25000) * 100).toFixed(0)}%</span>
@@ -327,7 +400,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── INSIGHTS ───────────────────────────────────────────────────── */}
+      {/* Insights */}
       <Label>Insights</Label>
       <div className="flex flex-col gap-2.5 mb-5">
         {monthly.insights.map((ins, i) => (
@@ -341,30 +414,10 @@ export default function DashboardPage() {
             {ins.positive && <span className="text-tx font-bold text-base shrink-0">✓</span>}
           </div>
         ))}
-
-        {monthly.revenue > 0 && monthly.expenses > 0 && (
-          <div className="border border-bdr bg-surface rounded-2xl px-4 py-3">
-            <div className="flex justify-between items-center">
-              <p className="text-sm text-t2">Cost per ₹1 earned</p>
-              <p className="text-base font-bold text-tx">₹{(monthly.expenses / monthly.revenue).toFixed(2)}</p>
-            </div>
-            <p className="text-xs text-t5 mt-1">Healthy agencies keep this under ₹0.60</p>
-          </div>
-        )}
       </div>
 
-      {/* ── OVERALL ────────────────────────────────────────────────────── */}
-      <Label>Overall</Label>
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <Card label="Capital Left">
-          <p className="text-2xl font-bold text-tx">{formatINR(Math.abs(overall.capitalRemaining))}</p>
-          {overall.capitalRemaining < 0 && <p className="text-xs text-t2 mt-1">overspent</p>}
-        </Card>
-        <Card label="Runway" alert={runwayWarn}>
-          <p className="text-2xl font-bold text-tx">{formatMonths(overall.runway)}</p>
-          {runwayWarn && <p className="text-xs text-t2 mt-1 italic">add revenue</p>}
-        </Card>
-      </div>
+      {/* All-time totals — footer context */}
+      <Label>All Time</Label>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <Card label="Total Revenue"><p className="text-2xl font-bold text-tx">{formatINR(overall.totalRevenue)}</p></Card>
         <Card label="Total Expenses"><p className="text-2xl font-bold text-tx">{formatINR(overall.totalExpenses)}</p></Card>

@@ -112,7 +112,15 @@ export default function ProjectCard({ project, pnl, onStatusToggle, onEdit, onDe
               </div>
             </div>
           ) : (
-            <p className="text-[11px] text-t5 italic">No expenses logged for this project</p>
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] text-t5 italic">Margin: not calculated — no costs logged</p>
+              <button
+                onClick={e => e.stopPropagation()}
+                className="text-[10px] border border-bds text-t3 px-2 py-1 rounded shrink-0"
+              >
+                Log costs
+              </button>
+            </div>
           )}
         </div>
       )}

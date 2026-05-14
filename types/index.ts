@@ -43,12 +43,13 @@ export interface Settings {
 }
 
 export interface DashboardMetrics {
-  capitalRemaining: number
-  totalRevenue: number
+  bankBalance: number      // starting_capital + paidRevenue - totalExpenses
+  paidRevenue: number      // Paid projects only — cash actually received
+  totalRevenue: number     // Paid + Confirmed projects
   totalExpenses: number
   netProfit: number
   profitMargin: number
   monthlyOverhead: number
-  runway: number
-  pendingRevenue: number
+  runway: number           // bankBalance / monthly_overhead (negative = overdrawn)
+  pendingRevenue: number   // Pending-status projects only
 }

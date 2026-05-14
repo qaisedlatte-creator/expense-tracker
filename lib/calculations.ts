@@ -7,21 +7,26 @@ export function calcDashboard(
   expenses: Expense[],
   settings: Settings
 ): DashboardMetrics {
-  const revenueProjects = projects.filter(
-    (p) => p.status === 'Confirmed' || p.status === 'Paid'
-  )
-  const pendingProjects = projects.filter((p) => p.status === 'Pending')
-  const totalRevenue = revenueProjects.reduce((s, p) => s + p.amount, 0)
-  const pendingRevenue = pendingProjects.reduce((s, p) => s + p.amount, 0)
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
-  const netProfit = totalRevenue - totalExpenses
-  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
-  const capitalRemaining = settings.starting_capital - totalExpenses
-  const runway =
-    settings.monthly_overhead > 0 ? capitalRemaining / settings.monthly_overhead : Infinity
+  const paidProjects      = projects.filter((p) => p.status === 'Paid')
+  const confirmedProjects = projects.filter((p) => p.status === 'Confirmed')
+  const pendingProjects   = projects.filter((p) => p.status === 'Pending')
+
+  const paidRevenue      = paidProjects.reduce((s, p) => s + p.amount, 0)
+  const confirmedRevenue = confirmedProjects.reduce((s, p) => s + p.amount, 0)
+  const totalRevenue     = paidRevenue + confirmedRevenue
+  const pendingRevenue   = pendingProjects.reduce((s, p) => s + p.amount, 0)
+  const totalExpenses    = expenses.reduce((s, e) => s + e.amount, 0)
+  const netProfit        = totalRevenue - totalExpenses
+  const profitMargin     = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
+
+  // bankBalance = actual cash in hand: capital + received payments − paid expenses
+  const bankBalance = settings.starting_capital + paidRevenue - totalExpenses
+  const runway      =
+    settings.monthly_overhead > 0 ? bankBalance / settings.monthly_overhead : Infinity
 
   return {
-    capitalRemaining,
+    bankBalance,
+    paidRevenue,
     totalRevenue,
     totalExpenses,
     netProfit,
