@@ -11,6 +11,22 @@ interface Message {
   streaming?: boolean
 }
 
+interface SRInstance {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  onstart:  (() => void) | null
+  onend:    (() => void) | null
+  onerror:  (() => void) | null
+  onresult: ((e: SREvent) => void) | null
+  start: () => void
+  stop:  () => void
+}
+interface SRResult   { transcript: string }
+interface SREvent    { results: ArrayLike<{ [i: number]: SRResult; isFinal: boolean }> }
+type SRConstructor = new () => SRInstance
+type WindowWithSR  = typeof window & { webkitSpeechRecognition?: SRConstructor; SpeechRecognition?: SRConstructor }
+
 const DEFAULT_SETTINGS: Settings = {
   starting_capital: 20000,
   monthly_overhead: 2000,
@@ -39,7 +55,7 @@ export default function ChatPage() {
   // Voice input state
   const [listening,   setListening]   = useState(false)
   const [speechAvailable, setSpeechAvailable] = useState(false)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<SRInstance | null>(null)
 
   const bottomRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLTextAreaElement>(null)
@@ -47,8 +63,8 @@ export default function ChatPage() {
 
   // Detect SpeechRecognition support
   useEffect(() => {
-    const SR = (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition
-      ?? (typeof SpeechRecognition !== 'undefined' ? SpeechRecognition : null)
+    const w = window as WindowWithSR
+    const SR = w.webkitSpeechRecognition ?? w.SpeechRecognition ?? null
     if (SR) setSpeechAvailable(true)
   }, [])
 
@@ -104,20 +120,20 @@ export default function ChatPage() {
       return
     }
 
-    const SR = (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition
-      ?? (typeof SpeechRecognition !== 'undefined' ? SpeechRecognition : null)
+    const w = window as WindowWithSR
+    const SR = w.webkitSpeechRecognition ?? w.SpeechRecognition ?? null
     if (!SR) return
 
     const recognition = new SR()
-    recognition.lang        = 'en-IN'
-    recognition.continuous  = false
+    recognition.lang           = 'en-IN'
+    recognition.continuous     = false
     recognition.interimResults = true
 
     recognition.onstart  = () => setListening(true)
     recognition.onend    = () => setListening(false)
     recognition.onerror  = () => setListening(false)
 
-    recognition.onresult = (e: SpeechRecognitionEvent) => {
+    recognition.onresult = (e: SREvent) => {
       const transcript = Array.from(e.results)
         .map(r => r[0].transcript)
         .join('')
